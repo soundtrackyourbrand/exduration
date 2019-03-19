@@ -52,7 +52,6 @@ defmodule ExDuration do
       iex> start = :os.system_time(:second)
       ...> ExDuration.since(start, :second)
       "0s"
-
   """
   @spec since(start :: integer, :microsecond | :millisecond | :second) :: String.t()
   def since(start, unit \\ :microsecond) do
@@ -72,7 +71,6 @@ defmodule ExDuration do
       ...>                 utc_offset: 3600, std_offset: 0, time_zone: "Europe/Stockholm"}
       iex> ExDuration.between(dt1, dt2)
       "10h10m10.1001s"
-
   """
   @spec between(Calendar.datetime(), Calendar.datetime()) ::
           String.t()
@@ -149,5 +147,154 @@ defmodule ExDuration do
       |> String.trim_trailing("0")
 
     "." <> subsecond
+  end
+
+  @subsecond_regex ~r/^([1-9][0-9]*)(ms|μs)$/
+  @hms_regex ~r/^(([1-9][0-9]*)h)?(([1-9][0-9]*)m)?(([1-9][0-9]*|0)(\.([0-9]{1,6}))?s)?$/
+
+  @doc """
+  Parses `duration` into `unit`s.
+
+  Raises `ArgumentError` if parsing `duration` fails.
+
+  ## Examples
+
+      iex> ExDuration.parse!("1s", :millisecond)
+      1000
+
+      iex> ExDuration.parse!("", :millisecond)
+      ** (ArgumentError) invalid duration format
+
+      iex> ExDuration.parse!("1s", :millis)
+      ** (ArgumentError) argument error
+  """
+  @spec parse!(String.t(), unit :: :microsecond | :millisecond | :second | :minute | :hour) ::
+          integer
+  def parse!(duration, unit) do
+    case parse(duration, unit) do
+      {:ok, n} -> n
+      :error -> raise ArgumentError, message: "invalid duration format"
+    end
+  end
+
+  @doc """
+  Parses `duration` into `unit`s.
+
+  Returns {:ok, integer} or :error if parsing the `duration` fails.
+
+  ### Format: hms(.ss)
+
+  * `h` - hours as integer
+  * `m` - minutes as integer
+  * `s` - seconds as integer
+  * `ss` - sub seconds (optional, maximum six digits)
+
+  ### Format: [ms|μs]
+
+  * `ms` - milliseconds as integer
+  * `μs` - microseconds as integer
+
+  ## Examples
+
+      iex> ExDuration.parse("1h2m3.456789s", :second)
+      {:ok, 3723}
+
+      iex> ExDuration.parse("5m", :millisecond)
+      {:ok, 300000}
+
+      iex> ExDuration.parse("100ms", :millisecond)
+      {:ok, 100}
+
+      iex> ExDuration.parse("", :hour)
+      :error
+  """
+  @doc since: "0.1.1"
+  @spec parse(String.t(), unit :: :microsecond | :millisecond | :second | :minute | :hour) ::
+          {:ok, integer} | :error
+  def parse(duration, _unit) when byte_size(duration) == 0, do: :error
+
+  def parse(duration, unit) do
+    case parse_to_micros(duration) do
+      :error -> :error
+      micros -> {:ok, micros_to(micros, unit)}
+    end
+  end
+
+  @spec parse_to_micros(String.t()) :: micros :: integer | :error
+  defp parse_to_micros(duration) do
+    cond do
+      duration == "" -> :error
+      String.match?(duration, @hms_regex) -> hms_to_micros(duration)
+      String.match?(duration, @subsecond_regex) -> subsecond_to_micros(duration)
+      true -> :error
+    end
+  end
+
+  @spec micros_to(micros :: integer, unit :: atom) :: integer
+  defp micros_to(micros, unit) do
+    case unit do
+      :microsecond -> micros
+      :millisecond -> div(micros, @millisecond)
+      :second -> div(micros, @second)
+      :minute -> div(micros, @minute)
+      :hour -> div(micros, @hour)
+      _ -> raise ArgumentError
+    end
+  end
+
+  @spec hms_to_micros(String.t()) :: integer
+  defp hms_to_micros(duration) do
+    case Regex.run(@hms_regex, duration) do
+      [_duration, _hour, h, _minute, m] ->
+        hms_to_micros(h, m, "", "")
+
+      [_duration, _hour, h, _minute, m, _second, s] ->
+        hms_to_micros(h, m, s, "")
+
+      [_duration, _hour, h, _minute, m, _second, s, _sub, sub] ->
+        micros = String.pad_trailing(sub, 6, "0")
+        hms_to_micros(h, m, s, micros)
+    end
+  end
+
+  @spec hms_to_micros(
+          hour :: String.t(),
+          minute :: String.t(),
+          second :: String.t(),
+          micros :: String.t()
+        ) :: integer
+  defp hms_to_micros(hour, minute, second, micros) do
+    [hour, minute, second, micros]
+    |> Enum.map(&parse_integer/1)
+    |> Enum.zip([@hour, @minute, @second, 1])
+    |> Enum.reduce(0, fn zip, acc ->
+      {n, multiplier} = zip
+      acc + n * multiplier
+    end)
+  end
+
+  @spec parse_integer(String.t()) :: integer
+  defp parse_integer(str) do
+    case str do
+      "" ->
+        0
+
+      _ ->
+        {i, _} = Integer.parse(str)
+        i
+    end
+  end
+
+  @spec subsecond_to_micros(String.t()) :: integer
+  defp subsecond_to_micros(duration) do
+    case Regex.run(@subsecond_regex, duration) do
+      [_duration, millis, "ms"] ->
+        {millis, _} = Integer.parse(millis)
+        millis * @millisecond
+
+      [_duration, micros, "μs"] ->
+        {micros, _} = Integer.parse(micros)
+        micros
+    end
   end
 end
