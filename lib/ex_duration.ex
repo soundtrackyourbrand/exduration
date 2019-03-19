@@ -168,6 +168,7 @@ defmodule ExDuration do
       iex> ExDuration.parse!("1s", :millis)
       ** (ArgumentError) argument error
   """
+  @doc since: "0.1.1"
   @spec parse!(String.t(), unit :: :microsecond | :millisecond | :second | :minute | :hour) ::
           integer
   def parse!(duration, unit) do
