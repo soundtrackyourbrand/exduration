@@ -16,6 +16,10 @@ Logger.info("work took #{ExDuration.since(start, :millisecond)}")
 
 # Format the duration between two DateTime's
 Logger.info("A and B are #{ExDuration.between(dt1, dt2)} apart")
+
+# Parse a duration string
+{:ok, millis} = ExDuration.parse("5m", :millisecond)
+millis = ExDuration.parse!("5m", :millisecond)
 ```
 
 ## Installation
