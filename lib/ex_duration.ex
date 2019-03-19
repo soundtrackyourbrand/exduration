@@ -180,7 +180,7 @@ defmodule ExDuration do
   @doc """
   Parses `duration` into `unit`s.
 
-  Returns {:ok, integer} or :error if parsing the `duration` fails.
+  Returns `{:ok, integer}` or `:error` if parsing `duration` fails.
 
   ### Format: hms(.ss)
 
