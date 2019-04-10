@@ -246,6 +246,9 @@ defmodule ExDuration do
   @spec hms_to_micros(String.t()) :: integer
   defp hms_to_micros(duration) do
     case Regex.run(@hms_regex, duration) do
+      [_duration, _hour, h] ->
+        hms_to_micros(h, "", "", "")
+
       [_duration, _hour, h, _minute, m] ->
         hms_to_micros(h, m, "", "")
 
